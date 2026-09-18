@@ -1,11 +1,3 @@
-# Club Helper Bot
+# Club Helper Bot + PostgreSQL
 
-## Railway
-
-1. Создайте проект на Railway.
-2. Загрузите содержимое репозитория.
-3. Добавьте переменную окружения:
-
-BOT_TOKEN=<ваш токен>
-
-4. Deploy.
+Добавьте BOT_TOKEN и DATABASE_URL в Railway.
