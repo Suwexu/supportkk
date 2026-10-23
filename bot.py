@@ -20,9 +20,9 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-CATEGORY_RE = re.compile(r"(?m)^\\s*#([A-Za-zА-Яа-яЁё0-9_-]+)\\s*$")
-PROBLEM_RE = re.compile(r"(?ims)^\\s*Проблема\\s*:\\s*(.*?)\\s*(?=^\\s*Решение\\s*:|\\Z)")
-SOLUTION_RE = re.compile(r"(?ims)^\\s*Решение\\s*:\\s*(.*?)\\s*\\Z")
+CATEGORY_RE = re.compile(r"(?m)^\s*#([A-Za-zА-Яа-яЁё0-9_-]+)\s*$")
+PROBLEM_RE = re.compile(r"(?ims)^\s*Проблема\s*:\s*(.*?)\s*(?=^\s*Решение\s*:|\Z)")
+SOLUTION_RE = re.compile(r"(?ims)^\s*Решение\s*:\s*(.*?)\s*\Z")
 
 STOP_WORDS = {
     "и", "а", "но", "в", "во", "на", "по", "с", "со", "к", "ко", "у", "от",
@@ -76,28 +76,39 @@ def rank_results(query: str, rows):
     return [row for _, row in ranked[:5]]
 
 
+def clean_solution(solution: str) -> str:
+    solution = (solution or "").replace("\r\n", "\n").replace("\r", "\n")
+    # Also repair older records that may contain the two literal characters \ and n.
+    solution = solution.replace("\\n", "\n")
+    solution = re.sub(r"\n{3,}", "\n\n", solution)
+    return solution.strip()
+
+
 def format_results(query: str, rows):
     safe_query = html.escape(query)
     if not rows:
         return (
-            f"По запросу «{safe_query}» ничего не нашёл.\\n"
+            f"По запросу «{safe_query}» ничего не нашёл.\n\n"
             "Попробуй другое ключевое слово или более короткий запрос."
         )
-    chunks = [f"Нашёл инструкции по запросу «{safe_query}»:"]
+
+    chunks = [f"<b>Нашёл инструкции по запросу «{safe_query}»</b>"]
     for index, row in enumerate(rows, start=1):
         category = html.escape(str(row.get("category") or "Без категории"))
         problem = html.escape(str(row.get("problem") or "Без описания"))
-        solution = str(row.get("solution") or "")
+        solution = clean_solution(str(row.get("solution") or ""))
         if len(solution) > 1500:
             solution = solution[:1500].rstrip() + "…"
+        solution = html.escape(solution)
         chunks.append(
-            f"\\n{index}. [{category}]\\n"
-            f"Проблема: {problem}\\n"
-            f"Решение:\\n{html.escape(solution)}"
+            f"<b>{index}. Инструкция — {category}</b>\n\n"
+            f"<b>Проблема:</b> {problem}\n\n"
+            f"<b>Решение:</b>\n{solution}"
         )
-    output = "\\n".join(chunks)
+
+    output = "\n\n━━━━━━━━━━━━━━\n\n".join(chunks)
     if len(output) > 3900:
-        output = output[:3850].rstrip() + "\\n\\n(Вывод сокращён: слишком много текста.)"
+        output = output[:3850].rstrip() + "\n\n<i>Вывод сокращён: слишком много текста.</i>"
     return output
 
 
@@ -105,8 +116,8 @@ async def search_and_reply(message: Message, query: str):
     query = query.strip()
     if not query:
         await message.answer(
-            "Напиши, что нужно найти. Например:\\n"
-            "/search не запускается Steam\\n\\n"
+            "Напиши, что нужно найти. Например:\n"
+            "/search не запускается Steam\n\n"
             "Можно и просто отправить сообщение с описанием проблемы."
         )
         return
@@ -117,12 +128,12 @@ async def search_and_reply(message: Message, query: str):
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
-        "Привет! Я помощник администратора компьютерного клуба.\\n\\n"
-        "• Отправь описание проблемы или используй /search запрос — я поищу решение в базе.\\n"
-        "• /count — сколько инструкций сохранено.\\n\\n"
-        "Чтобы добавить инструкцию, отправь сообщение в формате:\\n"
-        "#Категория\\n"
-        "Проблема: описание проблемы\\n"
+        "Привет! Я помощник администратора компьютерного клуба.\n\n"
+        "• Отправь описание проблемы или используй /search запрос — я поищу решение в базе.\n"
+        "• /count — сколько инструкций сохранено.\n\n"
+        "Чтобы добавить инструкцию, отправь сообщение в формате:\n"
+        "#Категория\n"
+        "Проблема: описание проблемы\n"
         "Решение: пошаговое решение"
     )
 
@@ -147,8 +158,8 @@ async def handle_text(message: Message):
         inserted = await save_knowledge(category, problem, solution)
         if inserted:
             await message.answer(
-                "Инструкция сохранена.\\n"
-                f"Категория: {category}\\n"
+                "Инструкция сохранена.\n"
+                f"Категория: {category}\n"
                 f"Всего в базе: {await get_count()}"
             )
         else:
